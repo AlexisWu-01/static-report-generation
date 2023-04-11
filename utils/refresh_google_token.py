@@ -4,7 +4,7 @@ import requests
 def refreshToken():
     with open('token.json', 'r') as f:
         creds = json.load(f)
-    
+        
     params = {
             "grant_type": "refresh_token",
             "client_id": creds["client_id"],

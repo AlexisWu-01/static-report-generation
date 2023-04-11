@@ -79,7 +79,8 @@ class Plotter(object):
         self.year_month = year_month
         self.sn_list = sn_list
         self.sn_dict = sn_dict
-
+        print('debugging')
+        print(sn_dict)
 
     def plot_and_export(self, plot_function, pm, **kwargs):
         try:
