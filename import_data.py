@@ -46,6 +46,7 @@ class DataImporter(object):
             client.devices.list(filter="city,like,%_oxbury%"))
         devices_simplified = devices_raw.iloc[:, [
             4, 3, 11, 15, 16, 5, 7, 8, 10, 12]]
+        
         return devices_simplified, devices_raw
 
     def _get_install_data(self):
@@ -56,6 +57,7 @@ class DataImporter(object):
         """
         pull_sensor_install_data()
         df = pd.read_csv('sensor_install_data.csv')
+        print(df)
         df = df[["Timestamp", "Select action", "Sensor serial number (SN)", "Date", "Time",
                  "Location site", "Is the sensor being installed indoors or outdoors?"]]
 
@@ -100,11 +102,10 @@ class DataImporter(object):
         # instantiate handler used to download data
         mod_handler = qp.ModPMHandler(start_date=start_date, end_date=end_date)
 
-        # Check if pckl file exists, pull data otherwise
         try:
+            # Try to load data from a pickle file first
             df = mod_handler.load_df(sensor_sn, start_date, end_date)
             print("\r Data pulled from Pickle file", flush=True)
-        # Otherwise download it from API
         except:
             try:
                 # Pull dataframe from API, will return the dataframe and save it as a pickle file
@@ -115,22 +116,24 @@ class DataImporter(object):
 
         # If dataframe comes back empty, return it
         if df.empty:
+            print(f"{sensor_sn}: Empty dataframe returned")
             return df
 
+        # Only get rows of the DataFrame between the installation and removal dates of the sensor
         install_df = self._get_install_data()
-
-        # Only look at rows pertaining to the current sensor
-        install_df = install_df.loc[install_df['sn'] == sensor_sn]
-
-        # Remove any data in the dataframe that was collected when the sensor was not installed
+        install_df = install_df.loc[install_df['sn'] == sensor_sn]\
+        # Create a mask for each installation and removal date of the sensor
+        mask = pd.Series(False, index=df.index)
         for row in install_df.itertuples():
             when = pd.to_datetime(row.Date + ' ' + row.Time)
             if when > start_date and when < end_date:
                 if row.action == 'installation':
-                    df = df.loc[df['timestamp'] > when]
+                    mask |= (df['timestamp'] > when)
                 elif row.action == 'removal':
-                    df = df.loc[df['timestamp'] < when]
-
+                    mask |= (df['timestamp'] < when)
+        # Filter the DataFrame based on the created mask
+        df = df.loc[mask]
+        
         return df
 
     def _get_start_end_dates(self, year_int_YYYY, month_int):
@@ -167,9 +170,10 @@ class DataImporter(object):
             sn_list = self.get_installed_sensor_list()
         except:
             sn_list = self.get_all_sensor_list()
-        sn_count = len(sn_list)
         sn_dict = {}
-        print(sn_list)
+
+        #  modify to meet manny's need
+        sn_count = len(sn_list)
 
         sensor_count = 1
         # For every sensor, download DataFrame with data of that sensor and insert it into dictionary
@@ -179,10 +183,13 @@ class DataImporter(object):
                 '\rSensor Progress: {0} / {1}\n'.format(sensor_count, sn_count), end='', flush=True)
             # If sensor data already exists in pickle file, use that
             df = self._data_month(sn)
+            print('checking data')
+            # print(df)
             # Add new dataframe to dictionary
             sn_dict[sn] = df
             sensor_count += 1
         print('\nDone!')
+        
         return sn_list, sn_dict
 
 
@@ -190,4 +197,5 @@ if __name__ == '__main__':
     (year, month) = (sys.argv[1], sys.argv[2])
     di = DataImporter(year=int(year), month=int(month))
     sn_list, sn_dict = di.get_PM_data()
+    print(sn_list, sn_dict)
     main(sn_list, sn_dict)
