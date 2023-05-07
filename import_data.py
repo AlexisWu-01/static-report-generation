@@ -14,7 +14,7 @@ import data_analysis.quantaq_pipeline as qp
 from pull_from_drive import pull_sensor_install_data
 from utils.create_maps import main
 
-with open('token.txt', 'r') as f:
+with open('quantaq_token.txt', 'r') as f:
     token = f.read()
 
 client = quantaq.QuantAQAPIClient(token)
@@ -33,6 +33,8 @@ class DataImporter(object):
         """
         self.year = year
         self.month = month
+        self.install_data = None  # initialize to None
+
 
     def get_all_sensor_list(self):
         """
@@ -55,19 +57,22 @@ class DataImporter(object):
 
         :returns: a dataframe of sensor install data
         """
-        pull_sensor_install_data()
-        df = pd.read_csv('sensor_install_data.csv')
-        print(df)
-        df = df[["Timestamp", "Select action", "Sensor serial number (SN)", "Date", "Time",
+        if self.install_data is None:
+            pull_sensor_install_data()
+            df = pd.read_csv('sensor_install_data.csv')
+            print(df)
+            df = df[["Timestamp", "Select action", "Sensor serial number (SN)", "Date", "Time",
                  "Location site", "Is the sensor being installed indoors or outdoors?"]]
 
-        df = df.rename(columns={'Sensor serial number (SN)': 'sn',
+            df = df.rename(columns={'Sensor serial number (SN)': 'sn',
                                 'Select action': 'action',
                                 'Is the sensor being installed indoors or outdoors?': 'indoors_outdoors'}
                                 )
-        df['action'] = df['action'].str.extract(r'sensor (.*)$')
+            df['action'] = df['action'].str.extract(r'sensor (.*)$')
 
-        return df
+            self.install_data = df
+
+        return self.install_data
 
     def get_installed_sensor_list(self):
         """
@@ -133,7 +138,7 @@ class DataImporter(object):
                     mask |= (df['timestamp'] < when)
         # Filter the DataFrame based on the created mask
         df = df.loc[mask]
-        
+
         return df
 
     def _get_start_end_dates(self, year_int_YYYY, month_int):
