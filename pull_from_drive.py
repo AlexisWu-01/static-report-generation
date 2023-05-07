@@ -1,5 +1,5 @@
 """
-Author: Andrew DeCandia
+Author: Andrew DeCandia, Alexis Wu
 Project: Air Partners
 
 Script for pulling form data from google drives.
@@ -12,6 +12,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import requests
+import os.path
+import json
 
 from utils.refresh_google_token import refreshToken
 
@@ -45,8 +47,12 @@ def pull_sensor_install_data():
 
     try:
         service = build('drive', 'v3', credentials=creds)
-
-        items = {'maillist': '17GP7PlQYxr1A1_1srrSDpLjCplLztdHWG51XY2qZoVo',
+        if os.path.exists('google_config.json'):
+            with open('google_config.json','r') as f:
+                config = json.load(f)
+                items = config.get('items',{})
+        else:
+            items = {'maillist': '17GP7PlQYxr1A1_1srrSDpLjCplLztdHWG51XY2qZoVo',
                  'sensor_install_data': '15DDTqQkXqD16vCnOBBTz9mPUmVWnKywjxdNWF9N6Gcg'}
 
         print('Pulling sensor install data from google drive...')
