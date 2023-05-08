@@ -52,7 +52,7 @@ class CalendarPlot(object):
         self.cal = calendar.monthcalendar(year, month)
         # Save the PM data in the same format
         self.pm_vals = [[0 for day in week] for week in self.cal]
-
+        
     def _get_colors(self):    
         """
         Get palettable colors from Seaborn
@@ -97,6 +97,7 @@ class CalendarPlot(object):
         else:
             end_date = calendar.monthrange(self.year, self.month)[1]
         # Reformat data so only data from that month is plotted
+        df = df.drop(['geo','model','sn'],axis=1)
         df = df.set_index('timestamp').resample('1D').mean()
         start_date = end_date - df.shape[0]
         # Doing days in reversed order, for the case that a sensor was 
