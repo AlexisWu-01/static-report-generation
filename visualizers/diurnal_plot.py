@@ -39,12 +39,15 @@ class DiurnalPlot(object):
         # timestamp contains "local" time (but expresses it in UTC, so 18:59 Eastern is expressed as 18:59 UTC)
         # need to change the timezone without altering the hour of day.
         # So, convert to datetime, remove automatically applied UTC timezone, and convert to US/Eastern time.
-        dti = pd.to_datetime(df['timestamp']).dt.tz_localize(None).dt.tz_localize('US/Eastern')
-        df = df.assign(timestamp_local=dti)
-
+        try:
+            dti = pd.to_datetime(df['timestamp']).dt.tz_localize(None).dt.tz_localize('US/Eastern')
+            df = df.assign(timestamp_local=dti)
+        except:
+            pass
         #order by timestamp asc instead of desc
         df = df.sort_values(by=['timestamp'])
         return df
+
     
     def process_data(self, df, get_weekdays=True, resampling=True):
         """
@@ -63,6 +66,7 @@ class DiurnalPlot(object):
         
         # if resampling, resample dataframe for every 10 minutes
         if resampling:
+            df = df.drop(['geo','model','sn'],axis=1)
             df = df.set_index('timestamp').resample('10T').mean()
         
         # Create time column for indexing
