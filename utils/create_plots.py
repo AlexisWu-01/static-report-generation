@@ -6,13 +6,15 @@ Script for creating and exporting all figures needed for static reporting.
 """
 
 import os
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from visualizers.calendar_plot import CalendarPlot
 from visualizers.timeplot_thresholds import Timeplot
 from visualizers.diurnal_plot import DiurnalPlot
-from data_analysis.dataviz import OpenAirPlots
-
+# from data_analysis.dataviz import OpenAirPlots
+from .make_plots import PolarPlot
+# from .polarPlot import PolarPlot
 # Subscripts (for captions and labels)
 SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 
@@ -59,8 +61,7 @@ def wind_polar_plot(data_PM, pm):
     # Remove any points where wind data was unavailable. 
     df = df[df.wind_speed != 0]
 
-    # Format the dataPM to be read in R and plot wind data
-    air_plt = OpenAirPlots()
+    air_plt = PolarPlot()
     air_plt.polar_plot(df, 'utils/', [pm])
     #ro.r.polarPlot(dataPM, pollutant = p, main = f"{p.upper()} Polar Plot")
     
@@ -79,8 +80,7 @@ class Plotter(object):
         self.year_month = year_month
         self.sn_list = sn_list
         self.sn_dict = sn_dict
-        print('debugging')
-        print(sn_dict)
+ 
 
     def plot_and_export(self, plot_function, pm, **kwargs):
         try:
