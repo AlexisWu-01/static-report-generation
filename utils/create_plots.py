@@ -13,7 +13,7 @@ from visualizers.calendar_plot import CalendarPlot
 from visualizers.timeplot_thresholds import Timeplot
 from visualizers.diurnal_plot import DiurnalPlot
 # from data_analysis.dataviz import OpenAirPlots
-from .make_plots import PolarPlot
+from .polar_plot import PolarPlot
 # from .polarPlot import PolarPlot
 # Subscripts (for captions and labels)
 SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
