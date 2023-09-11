@@ -6,8 +6,7 @@ Script for importing necessary data for air quality analysis for static reportin
 """
 import sys
 import pandas as pd
-from calendar import monthrange
-import quantaq
+from quantaq import QuantAQAPIClient
 from quantaq.utils import to_dataframe
 from datetime import datetime
 import data_analysis.quantaq_pipeline as qp
@@ -15,9 +14,12 @@ from pull_from_drive import pull_sensor_install_data
 from utils.create_maps import main
 
 with open('quantaq_token.txt', 'r') as f:
-    token = f.read()
+    token = f.read().strip()
 
-client = quantaq.QuantAQAPIClient(token)
+
+TOKEN_FILE = 'quantaq_token.txt'
+SENSOR_INSTALL_DATA_FILE = 'sensor_install_data.csv'
+CITY_FILTER = "city,like,%_oxbury%"
 
 
 class DataImporter(object):
@@ -34,6 +36,8 @@ class DataImporter(object):
         self.year = year
         self.month = month
         self.install_data = None  # initialize to None
+        with open(TOKEN_FILE,'r') as f:
+            self.client = QuantAQAPIClient(f.read().strip())
 
 
     def get_all_sensor_list(self):
@@ -45,11 +49,11 @@ class DataImporter(object):
         :returns: A list of all sensor information
         """
         devices_raw = to_dataframe(
-            client.devices.list(filter="city,like,%_oxbury%"))
+            self.client.devices.list(filter=CITY_FILTER))
         devices_simplified = devices_raw.iloc[:, [
             4, 3, 11, 15, 16, 5, 7, 8, 10, 12]]
-        
         return devices_simplified, devices_raw
+    
 
     def _get_install_data(self):
         """
@@ -59,17 +63,13 @@ class DataImporter(object):
         """
         if self.install_data is None:
             pull_sensor_install_data()
-            df = pd.read_csv('sensor_install_data.csv')
-            print(df)
-            df = df[["Timestamp", "Select action", "Sensor serial number (SN)", "Date", "Time",
-                 "Location site", "Is the sensor being installed indoors or outdoors?"]]
-
-            df = df.rename(columns={'Sensor serial number (SN)': 'sn',
-                                'Select action': 'action',
-                                'Is the sensor being installed indoors or outdoors?': 'indoors_outdoors'}
-                                )
+            df = pd.read_csv(SENSOR_INSTALL_DATA_FILE)
+            df = df.rename(columns={
+                'Sensor serial number (SN)': 'sn',
+                'Select action': 'action',
+                'Is the sensor being installed indoors or outdoors?': 'indoors_outdoors'
+            })
             df['action'] = df['action'].str.extract(r'sensor (.*)$')
-
             self.install_data = df
 
         return self.install_data
@@ -86,12 +86,7 @@ class DataImporter(object):
 
         active_sensors = []
 
-        for row in df.itertuples():
-            if (row.sn not in active_sensors and row.action == 'installation' and pd.to_datetime(row.Date) < end_date
-                    and row.indoors_outdoors == 'Outdoors'):
-                active_sensors.append(row.sn)
-            elif (row.sn in active_sensors and row.action == 'removal' and pd.to_datetime(row.Date) < start_date):
-                active_sensors.remove(row.sn)
+        active_sensors = [row.sn for row in df.itertuples() if row.action == 'installation' and pd.to_datetime(row.Date) < end_date and row.indoors_outdoors == 'Outdoors']
 
         return active_sensors
 
@@ -125,21 +120,16 @@ class DataImporter(object):
             return df
 
         # Only get rows of the DataFrame between the installation and removal dates of the sensor
-        install_df = self._get_install_data()
-        install_df = install_df.loc[install_df['sn'] == sensor_sn]\
+        install_df = self._get_install_data().loc[self._get_install_data()['sn'] == sensor_sn]
         # Create a mask for each installation and removal date of the sensor
         mask = pd.Series(False, index=df.index)
         for row in install_df.itertuples():
-            when = pd.to_datetime(row.Date + ' ' + row.Time)
+            when = pd.to_datetime(f"{row.Date} {row.Time}")
             if when > start_date and when < end_date:
-                if row.action == 'installation':
-                    mask |= (df['timestamp'] > when)
-                elif row.action == 'removal':
-                    mask |= (df['timestamp'] < when)
+                if start_date < when < end_date:
+                    mask |= (df['timestamp'] > when) if row.action == 'installation' else (df['timestamp'] < when)
         # Filter the DataFrame based on the created mask
-        df = df.loc[mask]
-
-        return df
+        return df.loc[mask]
 
     def _get_start_end_dates(self, year_int_YYYY, month_int):
         """
@@ -152,14 +142,9 @@ class DataImporter(object):
         :returns: DateTime object for the last day of the month
         """
         # get next month
-        next_month = month_int+1 if month_int!=12 else 1
-        # get next year
-        next_year = year_int_YYYY if next_month!=1 else year_int_YYYY+1
-        # get start and end dates in type datetime
-        start_date = datetime(year_int_YYYY, month_int, 1)
-        # end date defined as first day of next month since the cutoff for
-        # downloading data from API is midnight of that day, which means all
-        # of the last day of the previous month gets included
+        next_month = self.month + 1 if self.month != 12 else 1
+        next_year = self.year if next_month != 1 else self.year + 1
+        start_date = datetime(self.year, self.month, 1)
         end_date = datetime(next_year, next_month, 1)
         return start_date, end_date
 
@@ -173,28 +158,17 @@ class DataImporter(object):
         # try to get installed sensor list; if there are no credentials, get all sensors
         try:
             sn_list = self.get_installed_sensor_list()
-        except:
+        except Exception as e:
+            print(f"Error fetching installed sensor list: {e}")
+            sn_list, _ = self.get_all_sensor_list()
             sn_list = self.get_all_sensor_list()
         sn_dict = {}
 
-        #  modify to meet manny's need
-        sn_count = len(sn_list)
-
-        sensor_count = 1
         # For every sensor, download DataFrame with data of that sensor and insert it into dictionary
-        for sn in sn_list:
-            # Print out sensor downloading progress
-            print(
-                '\rSensor Progress: {0} / {1}\n'.format(sensor_count, sn_count), end='', flush=True)
-            # If sensor data already exists in pickle file, use that
-            df = self._data_month(sn)
-            print('checking data')
-            # print(df)
-            # Add new dataframe to dictionary
-            sn_dict[sn] = df
-            sensor_count += 1
+        for idx, sn in enumerate(sn_list, 1):
+            print(f'\rSensor Progress: {idx} / {len(sn_list)}', end='', flush=True)
+            sn_dict[sn] = self._data_month(sn)
         print('\nDone!')
-        
         return sn_list, sn_dict
 
 
