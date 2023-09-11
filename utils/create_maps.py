@@ -25,6 +25,7 @@ def get_lats_and_longs(sn_list, sn_dict):
     sn_locs['sensor'] = sn_list
     sn_locs['lats'] = [sn_dict[sn].iloc[-1]['geo']['lat'] for sn in sn_list]
     sn_locs['longs'] = [sn_dict[sn].iloc[-1]['geo']['lon'] for sn in sn_list]
+    sn_locs = sn_locs.drop_duplicates()
     sn_locs = sn_locs.set_index('sensor')
     return sn_locs
 
@@ -42,10 +43,12 @@ def show(df, sn_list):
         os.mkdir('_images/locs')
     # Iterate through all sensors and create images for each one
     for sn in sn_list:
+        lat = df.loc[sn, 'lats']
+        lon = df.loc[sn, 'longs']
         # Layout graphic so that image centers on sensor in question
         layout = dict(margin=dict(l=0, t=0, r=0, b=0, pad=0),
                 mapbox=dict(accesstoken=MAPBOX_TOKEN,
-                            center=dict(lat=df['lats'][sn], lon=df['longs'][sn]),
+                            center=dict(lat=lat, lon=lon),
                             style='basic',
                             zoom=14))
         fig = go.Figure(data=data, layout=layout)

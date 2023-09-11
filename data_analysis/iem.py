@@ -27,7 +27,7 @@ SERVICE = "http://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?"
 DEFAULT_PARAMS = {
     "station": "BOS",   #sensor station
     "data": "drct",     #wind direction in deg from north. we also want wind speed, see ADDTL_PARAMS_STR
-    "tz": "utc",  #timezone
+    # "tz": "utc",  #timezone
     "format": "onlycomma",   #csv
     "latlon": "no",     #no latitude/longitude
     "elev": "no",       #no elevation
