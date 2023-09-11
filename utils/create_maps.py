@@ -14,7 +14,7 @@ def _read_token(token_path):
             token = f.read()
             return token
 
-MAPBOX_TOKEN = _read_token('mapbox_token.txt')
+MAPBOX_TOKEN = _read_token('creds/mapbox_token.txt')
 
 def get_lats_and_longs(sn_list, sn_dict):
     for i in range(len(sn_list) -1,-1,-1):

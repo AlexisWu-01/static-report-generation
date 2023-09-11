@@ -20,7 +20,7 @@ QuantAQ REST API documentation: https://quant-aq.github.io/py-quantaq/usage.html
 """
 
 # constants
-TOKEN_PATH = "token.txt"
+TOKEN_PATH = "creds/quantaq_token.txt"
 TODAY = datetime.today()
 CUTOFF = 300
 
