@@ -1,32 +1,67 @@
-#!/usr/bin/env python
+
 # -*- coding: utf-8 -*-
 import json
+import os
+import requests
 import sys
 import dropbox
+
+"""
+Author: Alexis (Xinyi) Wu
+Project: Air Partners
+Description: Script for managing credentials and uploading and deleting files from the Air Partners Dropbox account.
+"""
 
 class TransferData:
     """
     Class used for transfering data to and from the Air Partners Dropbox account.
-
-    NOTES: The strings currently used in this file are for a test Dropbox made with a test email.
-    Air Partners must make its own Dropbox account with its own email, and this setup will have to 
-    be reproduced. The link below explains how to get the refresh token after an app has been 
-    configured.
-
-    Make sure that all these strings, after being created, are either locally stored on the virtual
-    machine or are in a text document/JSON file and not in the Python files themselves. No need to risk
-    putting this information on a public Github repository.
-
-    https://stackoverflow.com/questions/70641660/how-do-you-get-and-use-a-refresh-token-for-the-dropbox-api-python-3-x/71794390#71794390
     """
+    CRED_FILE = 'creds/dropbox_creds.json'
+    
     def __init__(self):
-        with open('utils/dropbox_creds.json') as creds:
-            data = json.load(creds)
+        if not os.path.exists(self.CRED_FILE):
+            self.setup_dropbox_credentials()
+        with open(self.CRED_FILE, 'r') as f:
+            data = json.load(f)
         self.dbx = dropbox.Dropbox(
             app_key=data['app_key'],
             app_secret=data['app_secret'],
             oauth2_refresh_token=data['refresh_token']
         )
+
+
+    def setup_dropbox_credentials(self):
+        print("Dropbox credentials not found. Let's set them up.")
+        print("Please log in to the airpartners developer account and go to the setting page of the app.")
+        app_key = input("Enter the app key: ") 
+        app_secret = input("Enter the app secret: ")
+        print("\nVisit the following URL to get your AUTHORIZATION_CODE:")
+        print(f"https://www.dropbox.com/oauth2/authorize?client_id={app_key}&token_access_type=offline&response_type=code")
+        auth_code = input("\nEnter the AUTHORIZATION_CODE here: ")
+        token_url = "https://api.dropboxapi.com/oauth2/token"
+        headers = {
+            "Authorization": f"Basic {base64.b64encode(f'{app_key}:{app_secret}'.encode()).decode()}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        data = {
+            "code": auth_code,
+            "grant_type": "authorization_code"
+        }
+        response = requests.post(token_url, headers=headers, data=data)
+        if response.status_code == 200:
+            refresh_token = response.json().get('refresh_token')
+            creds = {
+                "app_key": app_key,
+                "app_secret": app_secret,
+                "refresh_token": refresh_token
+            }
+            with open(self.CRED_FILE, 'w') as f:
+                json.dump(creds, f)
+            print("Credentials saved successfully!")
+        else:
+            print("Failed to fetch refresh token. Please try again.")
+            sys.exit(1)
+
 
     def upload_file(self, file_from, file_to):
         """
