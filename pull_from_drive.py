@@ -20,9 +20,9 @@ from googleapiclient.errors import HttpError
 
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
-TOKEN_PATH = 'token.json' # Auto generated
-CREDENTIALS_PATH = 'google_credentials.json' # Manually downloaded from google platform
-CONFIG_PATH = 'google_config.json'
+TOKEN_PATH = 'creds/token.json' # Auto generated
+CREDENTIALS_PATH = 'creds/google_credentials.json' # Manually downloaded from google platform
+CONFIG_PATH = 'creds/google_config.json'
 AUTHORIZATION_URL = "https://oauth2.googleapis.com/token"
 
 def checkExpired():

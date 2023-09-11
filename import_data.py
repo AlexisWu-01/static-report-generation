@@ -17,7 +17,7 @@ with open('quantaq_token.txt', 'r') as f:
     token = f.read().strip()
 
 
-TOKEN_FILE = 'quantaq_token.txt'
+TOKEN_FILE = 'creds/quantaq_token.txt'
 SENSOR_INSTALL_DATA_FILE = 'sensor_install_data.csv'
 CITY_FILTER = "city,like,%_oxbury%"
 

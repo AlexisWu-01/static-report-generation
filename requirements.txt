@@ -81,3 +81,8 @@ tzlocal==4.2
 uritemplate==4.1.1
 urllib3==1.26.9
 wcwidth==0.2.5
+pandas
+py-quantaq
+google-api-python-client
+plotly
+dropbox
