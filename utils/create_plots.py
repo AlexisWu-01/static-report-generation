@@ -12,7 +12,6 @@ from matplotlib.ticker import MaxNLocator
 from visualizers.calendar_plot import CalendarPlot
 from visualizers.timeplot_thresholds import Timeplot
 from visualizers.diurnal_plot import DiurnalPlot
-# from data_analysis.dataviz import OpenAirPlots
 from .polar_plot import PolarPlot
 # from .polarPlot import PolarPlot
 # Subscripts (for captions and labels)
@@ -63,7 +62,6 @@ def wind_polar_plot(data_PM, pm):
 
     air_plt = PolarPlot()
     air_plt.polar_plot(df, 'utils/', [pm])
-    #ro.r.polarPlot(dataPM, pollutant = p, main = f"{p.upper()} Polar Plot")
     
     # Take current image, save image again using matplotlib
     img = plt.imread(fname=f'utils/_polar_{pm}.png')
