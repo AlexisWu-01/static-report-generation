@@ -25,7 +25,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from calendar import monthrange
 from datetime import datetime
-import data_analysis.quantaq_pipeline as qp
+import utils.quantaq_pipeline as qp
 from utils.create_plots import *
 import sys
 

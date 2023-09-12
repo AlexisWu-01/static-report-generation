@@ -1,9 +1,0 @@
-
-// It is the file to store sensor and maillist info reference. You can change this to refer to different files
-
-{
-    "items": {
-        "maillist": "17GP7PlQYxr1A1_1srrSDpLjCplLztdHWG51XY2qZoVo",
-        "sensor_install_data": "15DDTqQkXqD16vCnOBBTz9mPUmVWnKywjxdNWF9N6Gcg"
-    }
-}

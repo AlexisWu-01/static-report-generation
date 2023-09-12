@@ -4,19 +4,23 @@ Project: Air Partners
 
 Functions to collect figures into a static report PDF
 """
-import os, sys
+import os
+import sys
 import datetime as dt
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from pathlib import Path
 from fpdf import FPDF
 from PIL import Image
-from import_data import DataImporter
+from utils.import_data import DataImporter
+from utils.plots import PlotPipeline
+# Constants
+SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+DIC_MONTH = {
+    1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+    7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"
+}
 
-
-def generate_report(month, year, sn):
-    generator = ReportGenerator(month, year, sn)
-    generator.generate_report()
 
 class ReportGenerator:
 
@@ -29,25 +33,45 @@ class ReportGenerator:
         # format strings for current and previous month
         self.year_month = date_obj.isoformat()[:-3]
 
-    def _create_report_image(self):
-        """
-        Create JPEG file of static report with compiled visualizations and captions.
-        
-        :returns: none, makes an image file
-        """
-        
-        def import_and_plot_img(img_path):
+
+    def _import_and_plot_img(self,img_path):
             """
-            Get PNG files of graphs created for report.
+            Helper function to import and plot an image.
 
             :param plot_function: string representing function used to create plot.
             :param pm: string with particulate matter for graph, set to None for timeplot
             :returns: none
             """
 
-            plt.grid(0);plt.yticks([]);plt.xticks([])
+            plt.grid(0)
+            plt.yticks([])
+            plt.xticks([])
             img = mpimg.imread(img_path)
             plt.imshow(img)
+
+    def _images_to_pdf(self, imgs_path, pdf_path):
+            # initialize PDF
+            pdf = FPDF()
+            pdf.set_auto_page_break(0)
+            
+            img_list = [f'{imgs_path}/{img}' for img in os.listdir(imgs_path)]
+            # add pages for each image and place image on page
+            for img in img_list:
+                # add page with the same size as image
+                pdf.add_page()
+                pdf.image(img, 0, 8, 210, 280)
+                # close the image to save on memory
+                Image.open(img).close()
+            # save output into assigned PDF path
+            pdf.output(pdf_path)
+            pdf.close()
+
+    def _create_report_image(self):
+        """
+        Create JPEG file of static report with compiled visualizations and captions.
+        
+        :returns: none, makes an image file
+        """
         
         ################# FIRST PAGE ############################
 
@@ -95,7 +119,7 @@ class ReportGenerator:
         ## Timeplots with Thresholds
         fig.add_subplot(grid[3:9,:], frameon=False)
         plt.title('Particulate Matter Time Series', y=graph_title_position,fontsize=graph_title_size)
-        import_and_plot_img('{1}/Graphs/{2}/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'timeplot_threshold'))
+        self._import_and_plot_img('{1}/Graphs/{2}/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'timeplot_threshold'))
         # Caption
         fig.add_subplot(grid[8:10,:], frameon=False)
         plt.grid(0);plt.yticks([]);plt.xticks([])
@@ -113,14 +137,14 @@ class ReportGenerator:
 
         ## Polar plots
         fig.add_subplot(grid[9:16,:3], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm1/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'wind_polar_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm1/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'wind_polar_plot'))
 
         fig.add_subplot(grid[9:16,3:6], frameon=False)
         plt.title('PM and Wind', y=graph_title_position,fontsize=graph_title_size)
-        import_and_plot_img('{1}/Graphs/{2}/pm25/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'wind_polar_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm25/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'wind_polar_plot'))
 
         fig.add_subplot(grid[9:16,6:9], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm10/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'wind_polar_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm10/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'wind_polar_plot'))
         # Caption
         fig.add_subplot(grid[15:16,:], frameon=False)
         plt.grid(0);plt.yticks([]);plt.xticks([])
@@ -161,12 +185,12 @@ class ReportGenerator:
         ## Particle Sizes
         fig.add_subplot(grid[16:20,:6], frameon=False)
         plt.grid(0);plt.yticks([]);plt.xticks([])
-        import_and_plot_img('_images/particle_sizes.png')
+        self._import_and_plot_img('_images/particle_sizes.png')
         
         ## Map
         fig.add_subplot(grid[16:20,6:], frameon=False)
         plt.grid(0);plt.yticks([]);plt.xticks([])
-        import_and_plot_img('_images/locs/{0}.png'.format(self.sn))
+        self._import_and_plot_img('_images/locs/{0}.png'.format(self.sn))
 
 
         # Create Pictures directory in Reports directory (if exists, does nothing)
@@ -199,14 +223,14 @@ class ReportGenerator:
         
         ## Calendar plots
         fig2.add_subplot(grid2[1:7,:3], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm1/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'calendar_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm1/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'calendar_plot'))
 
         fig2.add_subplot(grid2[1:7,3:6], frameon=False)
         plt.title('Average (MEAN) Daily PM Concentration', y=graph_title_position,fontsize=graph_title_size)
-        import_and_plot_img('{1}/Graphs/{2}/pm25/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'calendar_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm25/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'calendar_plot'))
 
         fig2.add_subplot(grid2[1:7,6:9], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm10/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'calendar_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm10/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'calendar_plot'))
 
         # Caption
         fig2.add_subplot(grid2[7:8,:], frameon=False)
@@ -224,23 +248,23 @@ class ReportGenerator:
 
         ## Diurnal plots
         fig2.add_subplot(grid2[7:12,:3], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm1/weekday/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm1/weekday/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
 
         fig2.add_subplot(grid2[7:12,3:6], frameon=False)
         plt.title('Daily Trends in PM', y=graph_title_position,fontsize=graph_title_size)
-        import_and_plot_img('{1}/Graphs/{2}/pm25/weekday/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm25/weekday/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
 
         fig2.add_subplot(grid2[7:12,6:9], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm10/weekday/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm10/weekday/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
 
         fig2.add_subplot(grid2[11:16,:3], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm1/weekend/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm1/weekend/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
 
         fig2.add_subplot(grid2[11:16,3:6], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm25/weekend/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm25/weekend/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
 
         fig2.add_subplot(grid2[11:16,6:9], frameon=False)
-        import_and_plot_img('{1}/Graphs/{2}/pm10/weekend/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
+        self._import_and_plot_img('{1}/Graphs/{2}/pm10/weekend/{0}_{1}_{2}.jpeg'.format(self.sn, self.year_month, 'diurnal_plot'))
         # Caption
         fig2.add_subplot(grid2[14:19,:], frameon=False)
         plt.grid(0);plt.yticks([]);plt.xticks([])
@@ -267,28 +291,11 @@ class ReportGenerator:
         _create_report_image MUST be run first.
         """
         
-        def images_to_pdf(imgs_path, pdf_path):
-            # initialize PDF
-            pdf = FPDF()
-            pdf.set_auto_page_break(0)
-            
-            img_list = [f'{imgs_path}/{img}' for img in os.listdir(imgs_path)]
-            # add pages for each image and place image on page
-            for img in img_list:
-                # add page with the same size as image
-                pdf.add_page()
-                pdf.image(img, 0, 8, 210, 280)
-                # close the image to save on memory
-                Image.open(img).close()
-            # save output into assigned PDF path
-            pdf.output(pdf_path)
-            pdf.close()
-
         # Create PDFs directory in Reports directory (if exists, does nothing)
         folders = f'{self.year_month}/Reports/PDFs'
         Path(folders).mkdir(parents=True, exist_ok=True)
         # Convert images to PDFs
-        images_to_pdf('{1}/Reports/Pictures/{0}'.format(self.sn,self.year_month),
+        self._images_to_pdf('{1}/Reports/Pictures/{0}'.format(self.sn,self.year_month),
                     '{1}/Reports/PDFs/{0}_{1}_{2}.pdf'.format(self.sn,self.year_month,str('Report')))
 
     
@@ -305,13 +312,16 @@ if __name__=='__main__':
     year, month = int(sys.argv[1]), int(sys.argv[2])
     # Import sensor data from pickles
     di = DataImporter(year=year, month=month)
-    sn_list = di.get_installed_sensor_list()
+    sn_list, sn_dict = di.get_PM_data()
+    pl = PlotPipeline(year, month, sn_list, sn_dict)
+    pl.run()
 
     # generate reports for each sensor
     for sn in sn_list:
+        print(f"Generating report for {sn}...")
         try:
-            generate_report(month, year, sn)
+            generator = ReportGenerator(month, year, sn)
+            generator.generate_report()
             print(f"Finished report {sn}.")
         except:
             print(f"No report generated {sn}.")
-    # generate_report(6, 2022, "MOD-PM-00217")
