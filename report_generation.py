@@ -21,10 +21,6 @@ DIC_MONTH = {
 }
 
 
-# def generate_report(month, year, sn):
-#     generator = ReportGenerator(month, year, sn)
-#     generator.generate_report()
-
 class ReportGenerator:
 
     def __init__(self, month, year, sn):
@@ -325,4 +321,3 @@ if __name__=='__main__':
             print(f"Finished report {sn}.")
         except:
             print(f"No report generated {sn}.")
-    # generate_report(6, 2022, "MOD-PM-00217")
