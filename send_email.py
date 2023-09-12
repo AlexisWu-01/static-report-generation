@@ -9,7 +9,7 @@ import sys
 import os
 import pandas as pd
 import datetime as dt
-from dateutil.relativedelta import relativedelta
+import argparse
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -91,7 +91,7 @@ def handle_dropbox_upload(year_month):
         delete_zip(year_month)
         upload_zip(year_month)
 
-def main(year, month):
+def main(year, month, upload_to_dropbox, send_email):
     """Main function to handle the email sending process."""
     date_obj = dt.date(year, month, 1)
     year_month = date_obj.isoformat()[:-3]
@@ -100,38 +100,46 @@ def main(year, month):
     if not os.path.exists(TransferData.CRED_FILE):
         TransferData().setup_dropbox_credentials()
     zip_directory(year_month)
-    # handle_dropbox_upload(year_month)
+    if upload_to_dropbox:
+        handle_dropbox_upload(year_month)
+    if send_email:
+        # Get password from saved location
+        with open('creds/app_password.txt', 'r') as f:
+            password = f.read().strip()
 
-    # Get password from saved location
-    with open('creds/app_password.txt', 'r') as f:
-        password = f.read().strip()
+        # Get list of subscribed emails to send to
+        mailing_list = get_mailling_list()
 
-    # Get list of subscribed emails to send to
-    mailing_list = get_mailling_list()
-
-    # Send emails individually to preserve anonymity of subscribers
-    for email in mailing_list:
-        send_mail(
-            send_from="Air Partners Reports <reports@airpartners.org>",
-            send_to=[email],
-            subject=f'Air Quality Reports {year_month}',
-            message="""<a href="https://www.dropbox.com/sh/spwnq0yqvjvewax/AADk0c2Tum-7p_1ul6xiKzrPa?dl=0">These reports</a> 
-              have been automatically generated based on last month's air quality data. To access the reports, unzip 
-              the folder and navigate to reports then pdfs. In graphs we have included high res images of the graphs 
-              used in the reports for use in presentations or other media.<br>
-              If you want to know more about how these visuals were made, please visit airpartners.org.<br><br>
-              Please note that at the end of this month, the current zip file will be deleted and replaced with this 
-              month's data.<br><br>
-              Long Link:<br>https://www.dropbox.com/sh/spwnq0yqvjvewax/AADk0c2Tum-7p_1ul6xiKzrPa?dl=0<br><br>
-              Best regards,<br>Air Partners<br><br><br>
-              <a href="https://forms.gle/z9jPc8QNVRCCyChQ7">Unsubscribe</a>""",
-            # files=[],
-            server='smtp.gmail.com',
-            username='airpartners@airpartners.org',
-            password=password
-        )
+        # Send emails individually to preserve anonymity of subscribers
+        for email in mailing_list:
+            send_mail(
+                send_from="Air Partners Reports <reports@airpartners.org>",
+                send_to=[email],
+                subject=f'Air Quality Reports {year_month}',
+                message="""<a href="https://www.dropbox.com/sh/spwnq0yqvjvewax/AADk0c2Tum-7p_1ul6xiKzrPa?dl=0">These reports</a> 
+                have been automatically generated based on last month's air quality data. To access the reports, unzip 
+                the folder and navigate to reports then pdfs. In graphs we have included high res images of the graphs 
+                used in the reports for use in presentations or other media.<br>
+                If you want to know more about how these visuals were made, please visit airpartners.org.<br><br>
+                Please note that at the end of this month, the current zip file will be deleted and replaced with this 
+                month's data.<br><br>
+                Long Link:<br>https://www.dropbox.com/sh/spwnq0yqvjvewax/AADk0c2Tum-7p_1ul6xiKzrPa?dl=0<br><br>
+                Best regards,<br>Air Partners<br><br><br>
+                <a href="https://forms.gle/z9jPc8QNVRCCyChQ7">Unsubscribe</a>""",
+                # files=[],
+                server='smtp.gmail.com',
+                username='airpartners@airpartners.org',
+                password=password
+            )
 
 if __name__ == '__main__':
-       # get year and month from sys args
-    year, month = int(sys.argv[1]), int(sys.argv[2])
-    main(year, month)
+
+    parser = argparse.ArgumentParser(description="Send reports via email and/or upload to Dropbox.")
+    parser.add_argument("year", type=int, help="Year for the report.")
+    parser.add_argument("month", type=int, help="Month for the report.")
+    parser.add_argument("--no-email", action="store_false", dest="send_email", help="Do not send emails.")
+    parser.add_argument("--no-dropbox", action="store_false", dest="upload_to_dropbox", help="Do not upload to Dropbox.")
+    
+    args = parser.parse_args()
+    
+    main(args.year, args.month, upload_to_dropbox = args.upload_to_dropbox, send_email=args.send_email)
