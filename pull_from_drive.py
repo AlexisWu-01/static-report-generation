@@ -2,7 +2,7 @@
 Author: Andrew DeCandia, Alexis Wu
 Project: Air Partners
 
-Script for pulling form data from google drives.
+Script for setting/ refreshing google credentials and  pulling form data from google drives.
 """
 from __future__ import print_function
 import os
@@ -103,7 +103,7 @@ def load_config():
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH,'r') as f:
             config = json.load(f)
-            return config
+            return config['items']
     else:
         return {
             'maillist': '17GP7PlQYxr1A1_1srrSDpLjCplLztdHWG51XY2qZoVo',
