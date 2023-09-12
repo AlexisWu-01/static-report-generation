@@ -12,9 +12,8 @@ from datetime import datetime
 import data_analysis.quantaq_pipeline as qp
 from pull_from_drive import pull_sensor_install_data
 from utils.create_maps import main
+import concurrent.futures
 
-with open('quantaq_token.txt', 'r') as f:
-    token = f.read().strip()
 
 
 TOKEN_FILE = 'creds/quantaq_token.txt'
@@ -83,12 +82,26 @@ class DataImporter(object):
         start_date, end_date = self._get_start_end_dates(self.year, self.month)
 
         df = self._get_install_data()
-
         active_sensors = []
 
         active_sensors = [row.sn for row in df.itertuples() if row.action == 'installation' and pd.to_datetime(row.Date) < end_date and row.indoors_outdoors == 'Outdoors']
-
         return active_sensors
+
+    # def adjust_timezone(self, df, timestamp_col="timestamp"):
+    #     """
+    #     Adjusts the timezone of the timestamp column in the dataframe.
+
+    #     :param df: (DataFrame) the dataframe containing meteorological data
+    #     :param timestamp_col: (str) the name of the timestamp column
+    #     :returns: DataFrame with adjusted timezone
+    #     """
+    #     # Ensure the timestamp column is in datetime format
+    #     df[timestamp_col] = pd.to_datetime(df[timestamp_col])
+
+    #     # Set the timezone to UTC and then convert to America/New_York
+    #     df[timestamp_col] = df[timestamp_col].dt.tz_localize('UTC').dt.tz_convert('America/New_York')
+
+    #     return df
 
     def _data_month(self, sensor_sn):
         """
@@ -105,11 +118,12 @@ class DataImporter(object):
         try:
             # Try to load data from a pickle file first
             df = mod_handler.load_df(sensor_sn, start_date, end_date)
-            print("\r Data pulled from Pickle file", flush=True)
+            print(f"{sensor_sn}: Loaded from pickle file")
         except:
             try:
                 # Pull dataframe from API, will return the dataframe and save it as a pickle file
                 df = mod_handler.from_api(sensor_sn)
+                print(f"{sensor_sn}: Pulled from API")
             except:
                 # If there is a request protocol error, return an empty dataframe (temp solution)
                 return pd.DataFrame()
@@ -121,15 +135,23 @@ class DataImporter(object):
 
         # Only get rows of the DataFrame between the installation and removal dates of the sensor
         install_df = self._get_install_data().loc[self._get_install_data()['sn'] == sensor_sn]
+
         # Create a mask for each installation and removal date of the sensor
         mask = pd.Series(False, index=df.index)
         for row in install_df.itertuples():
             when = pd.to_datetime(f"{row.Date} {row.Time}")
-            if when > start_date and when < end_date:
-                if start_date < when < end_date:
-                    mask |= (df['timestamp'] > when) if row.action == 'installation' else (df['timestamp'] < when)
+            if start_date <= when <= end_date:
+                if row.action == 'installation':
+                    mask |= (df['timestamp'] > when)
+                elif row.action == 'removal':
+                    mask |= (df['timestamp'] < when)
+            elif when < start_date and row.action == 'installation':
+                mask |= (df['timestamp'] > when)
+
         # Filter the DataFrame based on the created mask
-        return df.loc[mask]
+        # df = self.adjust_timezone(df)
+        filtered_df = df.loc[mask]
+        return filtered_df
 
     def _get_start_end_dates(self, year_int_YYYY, month_int):
         """
@@ -148,6 +170,15 @@ class DataImporter(object):
         end_date = datetime(next_year, next_month, 1)
         return start_date, end_date
 
+    def _data_month_worker(self, sn):
+        """
+        Worker function to be used with ThreadPoolExecutor.
+        """
+        print(f'\rFetching data for sensor: {sn}', end='', flush=True)
+        # print(f"sn: {sn}")
+        # print(f"self._data_month(sn): {self._data_month(sn)}")
+        return sn, self._data_month(sn)
+
     def get_PM_data(self):
         """
         Collects data from all sensors for the month.
@@ -163,18 +194,22 @@ class DataImporter(object):
             sn_list, _ = self.get_all_sensor_list()
             sn_list = self.get_all_sensor_list()
         sn_dict = {}
+   
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            results = list(executor.map(self._data_month_worker, sn_list))
+        sn_list = []
+        for sn, df in results:
+            if not df.empty:
+                sn_dict[sn] = df
+                sn_list.append(sn)
 
-        # For every sensor, download DataFrame with data of that sensor and insert it into dictionary
-        for idx, sn in enumerate(sn_list, 1):
-            print(f'\rSensor Progress: {idx} / {len(sn_list)}', end='', flush=True)
-            sn_dict[sn] = self._data_month(sn)
         print('\nDone!')
+        # print(f"sn_list: {sn_list}")
+        # print(f"sn_dict: {sn_dict}")
         return sn_list, sn_dict
-
 
 if __name__ == '__main__':
     (year, month) = (sys.argv[1], sys.argv[2])
     di = DataImporter(year=int(year), month=int(month))
     sn_list, sn_dict = di.get_PM_data()
-    print(sn_list, sn_dict)
     main(sn_list, sn_dict)

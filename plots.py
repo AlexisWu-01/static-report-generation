@@ -9,7 +9,6 @@ from calendar import weekday
 import sys
 from import_data import DataImporter
 from utils.create_plots import *
-import data_analysis.quantaq_pipeline as qp
 
 
 # STATICS
@@ -27,7 +26,7 @@ date_str = str(YEAR) + '-0' + str(MONTH) if MONTH<=9 else str(YEAR) + '-' + str(
 # plot graphs
 pl = Plotter(date_str, sn_list, sn_dict)
 
-# calendar plots
+# # calendar plots
 pl.plot_and_export(calendar_plot, pm='pm1', month=MONTH, year=YEAR)
 pl.plot_and_export(calendar_plot, pm='pm25',month=MONTH, year=YEAR)
 pl.plot_and_export(calendar_plot, pm='pm10',month=MONTH, year=YEAR)

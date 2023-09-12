@@ -5,6 +5,8 @@ import os
 import requests
 import sys
 import dropbox
+import base64
+import time
 
 """
 Author: Alexis (Xinyi) Wu
@@ -32,7 +34,7 @@ class TransferData:
 
     def setup_dropbox_credentials(self):
         print("Dropbox credentials not found. Let's set them up.")
-        print("Please log in to the airpartners developer account and go to the setting page of the app.")
+        print("Go to https://www.dropbox.com/developers/apps to find the appkey and app secret.")
         app_key = input("Enter the app key: ") 
         app_secret = input("Enter the app secret: ")
         print("\nVisit the following URL to get your AUTHORIZATION_CODE:")
@@ -58,6 +60,7 @@ class TransferData:
             with open(self.CRED_FILE, 'w') as f:
                 json.dump(creds, f)
             print("Credentials saved successfully!")
+            time.sleep(1)
         else:
             print("Failed to fetch refresh token. Please try again.")
             sys.exit(1)

@@ -6,25 +6,13 @@ from pathlib import Path
 from matplotlib.colors import PowerNorm
 from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
+from scipy.stats import gaussian_kde
+from matplotlib.ticker import FormatStrFormatter
+import matplotlib.cm as cm
+from windrose import WindroseAxes
 
 
 
-
-def plot(df, sensor_id, save_prefix=None, smoothed=True, cols=None):
-    """
-    Plot data for the given sensor ID.
-    """
-    plot_path = f"imgs/{sensor_id}"
-    Path(plot_path).mkdir(parents=True, exist_ok=True)
-    save_prefix = save_prefix if save_prefix else smoothed
-    prefix = os.path.join(plot_path, save_prefix)
-
-    cols = cols if cols else df.columns
-    non_null_cols = [c for c in cols if not df[c].isnull().all()]
-
-    plt_obj = PolarPlot()
-    plt_obj.time_variation(df, prefix, non_null_cols)
-    plt_obj.wind_rose_plot(df, prefix, non_null_cols)
 
 
 class PolarPlot:
@@ -32,90 +20,108 @@ class PolarPlot:
     Class to generate polar plots.
     """
 
-    def time_variation(self, df, file_prefix, pollutants, figsize=(12, 7)):
-        """
-        Plot time variation for pollutants.
-        """
-        for p in pollutants:
-            plt.figure(figsize=figsize)
-            df.groupby(df['timestamp_local'].dt.hour)[p].mean().plot(kind='bar')
-            plt.title(f'Normalized {p.upper()} Diurnal Profile')
-            plt.xlabel('Hour of Day')
-            plt.ylabel(f'{p.upper()} Concentration')
-            plt.savefig(f"{file_prefix}_diurnal_{p}.png")
-            plt.close()
+    def __init__(self, figsize=(7, 7)):
+        self.figsize = figsize
 
-
-    def polar_plot(self, df, file_prefix, pollutants, figsize=(7, 7)):
+    def polar_plot(self, df, file_prefix, pollutants, dir_bins_count=721, speed_bins_count=1000):
         """
         Generate polar plots for pollutants.
+
+        Parameters:
+        - df: DataFrame containing wind data and pollutant values.
+        - file_prefix: Prefix for the saved file.
+        - pollutants: List of pollutant column names to plot.
+        - dir_bins_count: Number of bins for wind direction.
+        - speed_bins_count: Number of bins for wind speed.
         """
-        if 'wind_dir' not in df.columns:
-            raise ValueError("The dataframe must contain a 'wind_dir' column.")
+        if 'wind_dir' not in df.columns or 'wind_speed' not in df.columns:
+            raise ValueError("The dataframe must contain 'wind_dir' and 'wind_speed' columns.")
 
-        # Convert wind direction to radians
-        df['wind_rad'] = np.deg2rad(df['wind_dir'])
-
-        # Define bins for wind direction and speed
-        dir_bins = np.deg2rad(np.arange(0, 361, 10))
-        speed_bins = np.arange(0, df['wind_speed'].max() + 1, 1)
+        dir_bins = np.deg2rad(np.linspace(0, 360, dir_bins_count))
+        speed_bins = np.linspace(0, df['wind_speed'].max() + 1, speed_bins_count)
 
         for p in pollutants:
-            plt.figure(figsize=figsize)
-            ax = plt.subplot(1, 1, 1, polar=True)
-            self._configure_polar_axes(ax)
-            valid_data = df.dropna(subset=[p])
-            valid_data = valid_data[np.isfinite(valid_data[p])]
+            # self.__generate_plot(df, dir_bins, speed_bins, p, file_prefix)
+            self.__generate_plot_pcolormesh(df, dir_bins, speed_bins, p, file_prefix)
+            # self.__generate_plot_tricontourf(df, p, file_prefix)
 
-            dir_idx = np.digitize(valid_data['wind_rad'], dir_bins)
-            speed_idx = np.digitize(valid_data['wind_speed'], speed_bins)
-            binned_data = valid_data.groupby([dir_idx, speed_idx])[p].mean().reset_index()
+    def __generate_plot_tricontourf(self, df, pollutant, file_prefix):
+        fig = plt.figure(figsize=self.figsize)
+        ax = plt.subplot(1, 1, 1, polar=True)
+        self.__configure_polar_axes(ax)
 
-            binned_data['wind_rad'] = dir_bins[binned_data.iloc[:, 0].values - 1]
-            binned_data['wind_speed'] = speed_bins[binned_data.iloc[:, 1].values - 1]
+        valid_data = df.dropna(subset=[pollutant])
+        valid_data = valid_data[np.isfinite(valid_data[pollutant])]
+        wind_rad = np.deg2rad(valid_data['wind_dir'])
+        vmax = valid_data[pollutant].quantile(0.95)
+        levels = np.linspace(0, vmax, 100)
 
-            # Interpolate to create a continuous field
-            grid_dir, grid_speed = np.meshgrid(dir_bins, speed_bins)
-            grid_data = griddata((binned_data['wind_rad'], binned_data['wind_speed']), binned_data[p], (grid_dir, grid_speed), method='cubic')
-            grid_data = np.nan_to_num(grid_data, nan=np.nanmin(grid_data), posinf=np.nanmax(grid_data), neginf=np.nanmin(grid_data))
-            threshold = df[p].min() + 0.01 * (df[p].max() - df[p].min())
-            grid_data = gaussian_filter(grid_data, sigma=1.5)
-            grid_data[grid_data < threshold] = np.nan
+        cntr = ax.tricontourf(wind_rad, valid_data['wind_speed'], valid_data[pollutant], levels=levels, cmap='jet', alpha=0.9, extend='max')
+        cbar = plt.colorbar(cntr, ax=ax, pad=0.1, shrink=0.5)
+        cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
+        cbar.ax.tick_params(labelsize=10)  # Adjust font size
+        cbar.formatter = FormatStrFormatter('%.1f')  # Format to 2 decimal places
+        cbar.update_ticks()
+        plt.title(f'{pollutant.upper()} ($\mu g/m^3$)', pad=20)
+        plt.savefig(f"{file_prefix}_polar_{pollutant}.png")
+        plt.close()
 
-            
-            # Plot
-            levels = np.linspace(np.nanmin(grid_data), np.nanmax(grid_data), 100)
-            cntr = ax.contourf(grid_dir, grid_speed, grid_data, levels=levels,cmap='gist_ncar', alpha=0.9)
-            cbar = plt.colorbar(cntr, ax=ax, pad=0.1)
-            plt.title(f'{p.upper()} Wind Plot')
-            plt.savefig(f"{file_prefix}_polar_{p}.png")
-            plt.close()
+    def __generate_plot_pcolormesh(self, df, dir_bins, speed_bins, pollutant, file_prefix):
+        fig = plt.figure(figsize=self.figsize)
+        ax = plt.subplot(1, 1, 1, polar=True)
+        self.__configure_polar_axes(ax)
+
+        valid_data = df.dropna(subset=[pollutant])
+        valid_data = valid_data[np.isfinite(valid_data[pollutant])]
+        wind_rad = np.deg2rad(valid_data['wind_dir'])
+
+        grid_dir, grid_speed = np.meshgrid(dir_bins, speed_bins)
+        grid_data = griddata((wind_rad, valid_data['wind_speed']), valid_data[pollutant], (grid_dir, grid_speed), method='cubic')
+        vmax = valid_data[pollutant].quantile(0.95)  # 95% quantile for the color scale
+        grid_data = gaussian_filter(grid_data, sigma=1.0)
+
+        mesh = ax.pcolormesh(grid_dir, grid_speed, grid_data, cmap='jet', shading='auto',vmin=0, vmax=vmax)
+        cbar = plt.colorbar(mesh, ax=ax, pad=0.1, shrink=0.5)
+        cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
+        cbar.ax.tick_params(labelsize=10)
+        cbar.formatter = FormatStrFormatter('%.1f')
+        cbar.update_ticks()
+        plt.tight_layout()
+        plt.title(f'{pollutant.upper()} ($\mu g/m^3$)', pad=20, fontsize=16, fontweight='bold')
+        plt.savefig(f"{file_prefix}_polar_{pollutant}.png")
+        plt.close()
 
 
-    def _configure_polar_axes(self, ax):
-        """
-        Configure polar axes settings.
-        """
+    def __generate_plot(self, df, dir_bins, speed_bins, pollutant, file_prefix):
+        fig = plt.figure(figsize=self.figsize)
+        ax = plt.subplot(1, 1, 1, polar=True)
+        self.__configure_polar_axes(ax)
+
+        valid_data = df.dropna(subset=[pollutant])
+        valid_data = valid_data[np.isfinite(valid_data[pollutant])]
+        wind_rad = np.deg2rad(valid_data['wind_dir'])
+        vmax = valid_data[pollutant].quantile(0.95)
+        levels = np.linspace(0, vmax, 100)
+
+        grid_dir, grid_speed = np.meshgrid(dir_bins, speed_bins)
+        grid_data = griddata((wind_rad, valid_data['wind_speed']), valid_data[pollutant], (grid_dir, grid_speed), method='cubic')
+        
+        # for _ in range(3):
+        #     grid_data = gaussian_filter(grid_data, sigma=1.0)
+
+        cntr = ax.contourf(grid_dir, grid_speed, grid_data, levels=levels, cmap='jet', alpha=0.9, extend='max')
+        cbar = plt.colorbar(cntr, ax=ax, pad=0.1, shrink=0.5)
+        cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
+        cbar.ax.tick_params(labelsize=10)  # Adjust font size
+        cbar.formatter = FormatStrFormatter('%.1f')  # Format to 2 decimal places
+        cbar.update_ticks()
+        plt.title(f'{pollutant.upper()} ($\mu g/m^3$)', pad=20)
+        plt.savefig(f"{file_prefix}_polar_{pollutant}.png")
+        plt.close()
+
+    def __configure_polar_axes(self, ax):
         ax.set_theta_direction(-1)
         ax.set_theta_offset(np.pi/2)
         ax.set_xticks(np.deg2rad(np.arange(0, 360, 45)))
         ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'])
         ax.spines['polar'].set_visible(True)
-
-    def _get_levels_and_norm(self, df, p):
-        """
-        Get levels and normalization for contour plots.
-        """
-        levels = np.linspace(df[p].min(), df[p].max(), 1000)
-        norm = PowerNorm(gamma=0.6, vmin=df[p].min(), vmax=df[p].max())
-        return levels, norm
-
-    def _configure_colorbar(self, cbar, levels, p):
-        """
-        Configure colorbar settings.
-        """
-        cbar.set_label(f'{p} (ug/m3)')
-        num_ticks = 5
-        tick_indices = np.linspace(0, len(levels) - 1, num_ticks, dtype=int)
-        cbar.set_ticks(levels[tick_indices])
-        cbar.set_ticklabels(np.round(levels[tick_indices], 1))

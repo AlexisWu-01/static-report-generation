@@ -6,7 +6,7 @@ Class for creating timeplots to show air quality trends throughout the month
 on a minute (sampling) basis.
 """
 
-from IPython.core.pylabtools import figsize
+# from IPython.core.pylabtools import figsize
 from matplotlib.offsetbox import AnchoredText
 import matplotlib.pyplot as plt
 
@@ -57,7 +57,7 @@ class Timeplot(object):
         fig_axs[plot_number].legend(handles[::-1], labels[::-1],bbox_to_anchor=(1.0,0.5),loc = 'center left')
 
         try:
-            percent_above_upper = (pm >= threshold_upper).value_counts(True).sort_values()[1]
+            percent_above_upper = (pm >= threshold_upper).mean()
         except:
             percent_above_upper = 0
 
