@@ -58,8 +58,17 @@ def send_mail(send_from, send_to, subject, message, files=[],
     smtp = smtplib.SMTP(server, port)
     if use_tls:
         smtp.starttls()
-    smtp.login(username, password)
-    smtp.sendmail(send_from, send_to, msg.as_string())
+    try:
+        smtp.login(username, password)
+        print("Logged in to email account.")
+    except smtplib.SMTPAuthenticationError:
+        print("SMTP Authentication Error: Unable to login to the email account. Please check your credentials.")
+        smtp.quit()
+        return
+    try:
+        smtp.sendmail(send_from, send_to, msg.as_string())
+    except Exception as e:
+        print(f"Error sending email: {e}")
     smtp.quit()
 
 
@@ -91,10 +100,10 @@ def main(year, month):
     if not os.path.exists(TransferData.CRED_FILE):
         TransferData().setup_dropbox_credentials()
     zip_directory(year_month)
-    handle_dropbox_upload(year_month)
+    # handle_dropbox_upload(year_month)
 
     # Get password from saved location
-    with open('app_password.txt', 'r') as f:
+    with open('creds/app_password.txt', 'r') as f:
         password = f.read().strip()
 
     # Get list of subscribed emails to send to
@@ -106,8 +115,17 @@ def main(year, month):
             send_from="Air Partners Reports <reports@airpartners.org>",
             send_to=[email],
             subject=f'Air Quality Reports {year_month}',
-            message="""... [rest of the message] ...""",
-            files=[],
+            message="""<a href="https://www.dropbox.com/sh/spwnq0yqvjvewax/AADk0c2Tum-7p_1ul6xiKzrPa?dl=0">These reports</a> 
+              have been automatically generated based on last month's air quality data. To access the reports, unzip 
+              the folder and navigate to reports then pdfs. In graphs we have included high res images of the graphs 
+              used in the reports for use in presentations or other media.<br>
+              If you want to know more about how these visuals were made, please visit airpartners.org.<br><br>
+              Please note that at the end of this month, the current zip file will be deleted and replaced with this 
+              month's data.<br><br>
+              Long Link:<br>https://www.dropbox.com/sh/spwnq0yqvjvewax/AADk0c2Tum-7p_1ul6xiKzrPa?dl=0<br><br>
+              Best regards,<br>Air Partners<br><br><br>
+              <a href="https://forms.gle/z9jPc8QNVRCCyChQ7">Unsubscribe</a>""",
+            # files=[],
             server='smtp.gmail.com',
             username='airpartners@airpartners.org',
             password=password
