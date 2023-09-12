@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from fpdf import FPDF
 from PIL import Image
-from import_data import DataImporter
-from plots import PlotPipeline
+from utils.import_data import DataImporter
+from utils.plots import PlotPipeline
 # Constants
 SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 DIC_MONTH = {
