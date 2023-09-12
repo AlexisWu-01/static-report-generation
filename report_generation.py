@@ -13,6 +13,7 @@ from pathlib import Path
 from fpdf import FPDF
 from PIL import Image
 from import_data import DataImporter
+from plots import PlotPipeline
 # Constants
 SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 DIC_MONTH = {
@@ -311,10 +312,13 @@ if __name__=='__main__':
     year, month = int(sys.argv[1]), int(sys.argv[2])
     # Import sensor data from pickles
     di = DataImporter(year=year, month=month)
-    sn_list = di.get_installed_sensor_list()
+    sn_list, sn_dict = di.get_PM_data()
+    pl = PlotPipeline(year, month, sn_list, sn_dict)
+    pl.run()
 
     # generate reports for each sensor
     for sn in sn_list:
+        print(f"Generating report for {sn}...")
         try:
             generator = ReportGenerator(month, year, sn)
             generator.generate_report()
