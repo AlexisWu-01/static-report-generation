@@ -86,3 +86,7 @@ py-quantaq
 google-api-python-client
 plotly
 dropbox
+kaleido
+seaborn
+scipy
+fpdf
