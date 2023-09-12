@@ -55,11 +55,14 @@ class QuantAQHandler:
         s = datetime.now()
         #perform QuantAQ request
         data = self.client.data.list(sn=serial_num, start=start, stop=stop, raw=raw)
-        print(f"fetching data took {datetime.now()-s} secs")
-
+        df = pd.DataFrame(data)
+        if not df.empty:
+            print(f"fetching data took {datetime.now()-s} secs")
+        else:
+            print(f"no data found for {serial_num}")
         #convert returned info to pandas df
-        return pd.DataFrame(data)
-
+        return df
+    
 class DataHandler:
     """
     Parent class containing shared utility functions for all sensor types in QuantAQ network

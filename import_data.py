@@ -130,7 +130,6 @@ class DataImporter(object):
 
         # If dataframe comes back empty, return it
         if df.empty:
-            print(f"{sensor_sn}: Empty dataframe returned")
             return df
 
         # Only get rows of the DataFrame between the installation and removal dates of the sensor
