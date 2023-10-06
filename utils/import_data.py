@@ -173,7 +173,7 @@ class DataImporter(object):
         """
         Worker function to be used with ThreadPoolExecutor.
         """
-        print(f'\rFetching data for sensor: {sn} \n', end='', flush=True)
+        # print(f'\rFetching data for sensor: {sn} \n', end='', flush=True)
         # print(f"sn: {sn}")
         # print(f"self._data_month(sn): {self._data_month(sn)}")
         return sn, self._data_month(sn)
