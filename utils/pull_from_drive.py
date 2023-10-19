@@ -26,7 +26,6 @@ def load_credentials():
     creds = None
     if os.path.exists(CREDENTIALS_PATH):
         creds =  service_account.Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=SCOPES)
-        print(f"credentials loaded: {creds}")
     else:
         # we do not have the google_credentials.json file
         print("No credentials file found. Please download the credentials file from the google platform.")

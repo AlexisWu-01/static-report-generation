@@ -56,10 +56,8 @@ def wind_polar_plot(data_PM, pm):
     #df = df.rename(columns={"timestamp_local": "date", "wind_speed": "ws", "wind_dir": "wd"})
     #df.wd = df.wd.replace(0.0, 360.0)
     df = data_PM[['timestamp', 'wind_speed', 'wind_dir', 'pm25', 'pm10', 'pm1']]
-    
     # Remove any points where wind data was unavailable. 
     df = df[df.wind_speed != 0]
-
     air_plt = PolarPlot()
     air_plt.polar_plot(df, 'utils/', [pm])
     

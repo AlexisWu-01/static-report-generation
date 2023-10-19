@@ -45,8 +45,6 @@ class PolarPlot:
 
         for p in pollutants:
             self.__generate_plot(df, p, file_prefix)
-            # self.__generate_plot_pcolormesh(df, dir_bins, speed_bins, p, file_prefix)
-            # self.__generate_plot_tricontourf(df, p, file_prefix)
 
     def aggregate_data(self, df):
         # Assuming wind direction is in degrees and wind speed is numerical
@@ -57,51 +55,6 @@ class PolarPlot:
         aggregated['wind_speed_bin_mid'] = aggregated['wind_speed_bin'].apply(lambda x: x.mid)
         return aggregated
 
-    def __generate_plot_tricontourf(self, df, pollutant, file_prefix):
-        fig = plt.figure(figsize=self.figsize)
-        ax = plt.subplot(1, 1, 1, polar=True)
-        self.__configure_polar_axes(ax)
-
-        valid_data = df.dropna(subset=[pollutant])
-        valid_data = valid_data[np.isfinite(valid_data[pollutant])]
-        wind_rad = np.deg2rad(valid_data['wind_dir'])
-        vmax = valid_data[pollutant].quantile(0.95)
-        levels = np.linspace(0, vmax, 100)
-
-        cntr = ax.tricontourf(wind_rad, valid_data['wind_speed'], valid_data[pollutant], levels=levels, cmap='jet', alpha=0.9, extend='max')
-        cbar = plt.colorbar(cntr, ax=ax, pad=0.1, shrink=0.5)
-        cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
-        cbar.ax.tick_params(labelsize=10)  # Adjust font size
-        cbar.formatter = FormatStrFormatter('%.1f')  # Format to 2 decimal places
-        cbar.update_ticks()
-        plt.title(f'{pollutant.upper()} ($\mu g/m^3$)', pad=20)
-        plt.savefig(f"{file_prefix}_polar_{pollutant}.png")
-        plt.close()
-
-    def __generate_plot_pcolormesh(self, df, dir_bins, speed_bins, pollutant, file_prefix):
-        fig = plt.figure(figsize=self.figsize)
-        ax = plt.subplot(1, 1, 1, polar=True)
-        self.__configure_polar_axes(ax)
-
-        valid_data = df.dropna(subset=[pollutant])
-        valid_data = valid_data[np.isfinite(valid_data[pollutant])]
-        wind_rad = np.deg2rad(valid_data['wind_dir'])
-
-        grid_dir, grid_speed = np.meshgrid(dir_bins, speed_bins)
-        grid_data = griddata((wind_rad, valid_data['wind_speed']), valid_data[pollutant], (grid_dir, grid_speed), method='cubic')
-        vmax = valid_data[pollutant].quantile(0.95)  # 95% quantile for the color scale
-
-        mesh = ax.pcolormesh(grid_dir, grid_speed, grid_data, cmap='jet', shading='auto',vmin=0, vmax=vmax)
-        cbar = plt.colorbar(mesh, ax=ax, pad=0.1, shrink=0.5)
-        cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
-        cbar.ax.tick_params(labelsize=10)
-        cbar.formatter = FormatStrFormatter('%.1f')
-        cbar.update_ticks()
-        plt.tight_layout()
-        plt.title(f'{pollutant.upper()} ($\mu g/m^3$)', pad=20, fontsize=16, fontweight='bold')
-        plt.savefig(f"{file_prefix}_polar_{pollutant}.png")
-        plt.close()
-
     
     def __generate_plot(self, df, pollutant, file_prefix):
         fig = plt.figure(figsize=self.figsize)
@@ -109,11 +62,11 @@ class PolarPlot:
         self.__configure_polar_axes(ax)
         df = df.dropna(subset=['wind_dir', 'wind_speed'])
 
-        bin_edges = np.linspace(0, 360, 9, endpoint=True)  # This creates 8 bins of 45 degrees each
+        bin_edges = np.arange(0, 370, 10)  # This creates 36 bins of 10 degrees each
         df = df.dropna(subset=['wind_dir', 'wind_speed', pollutant])
         df['wind_dir'] = df['wind_dir'] % 360  # Ensures wind_dir values are within [0, 360)
-        df['wind_dir_bin'] = pd.cut(df['wind_dir'], bins=np.concatenate(([0], bin_edges + 45)), include_lowest=True, right=False)
-        df['wind_speed_bin'] = pd.cut(df['wind_speed'], bins=np.linspace(0, df['wind_speed'].max() + 1, 100), include_lowest=True)
+        df['wind_dir_bin'] = pd.cut(df['wind_dir'], bins=bin_edges, include_lowest=True, right=False)
+        df['wind_speed_bin'] = pd.cut(df['wind_speed'], bins=np.arange(0, df['wind_speed'].max() + 1, 0.1), include_lowest=True)
         #aggregating pollutant concentration
         binned_data = df.groupby(['wind_dir_bin', 'wind_speed_bin'],observed=False)[pollutant].mean().reset_index()
 
@@ -126,7 +79,8 @@ class PolarPlot:
 
 
         # Modelling with GAM
-        gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], np.sqrt(binned_data[pollutant]))
+        gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], 
+                                                    (binned_data[pollutant]))
         #cartesian grid
         theta_grid, r_grid = np.meshgrid(
                             np.deg2rad(np.linspace(0, 360, 100)),
@@ -135,7 +89,7 @@ class PolarPlot:
         predicted_concentration = gam.predict(np.column_stack((theta_grid.ravel(), r_grid.ravel()))).reshape(theta_grid.shape)
         invalid_mask =  np.isnan(predicted_concentration) | np.isinf(predicted_concentration)
         predicted_concentration = np.ma.masked_where(invalid_mask, predicted_concentration)
-        levels = np.linspace(np.min(predicted_concentration), np.max(predicted_concentration), 100)
+        levels = np.linspace(np.min(predicted_concentration), np.max(predicted_concentration), 1000)
         contour = ax.contourf(theta_grid, r_grid, predicted_concentration, levels = levels, cmap='jet')
         cbar = plt.colorbar(contour, ax=ax, pad=0.1, shrink=0.5)
         cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)

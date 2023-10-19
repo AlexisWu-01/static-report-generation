@@ -18,10 +18,12 @@ class PlotPipeline():
         self.date_str = str(self.YEAR) + '-0' + str(self.MONTH) if self.MONTH <= 9 else str(self.YEAR) + '-' + str(self.MONTH)
         self.sn_list = sn_list
         self.sn_dict = sn_dict
+        
 
 
     def plot_graphs(self):
         pl = Plotter(self.date_str, self.sn_list, self.sn_dict)
+        
 
         # Define the tasks to be run in parallel
         tasks = [
