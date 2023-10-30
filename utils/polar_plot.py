@@ -14,7 +14,7 @@ from sklearn.neighbors import KernelDensity
 from matplotlib.colors import ListedColormap
 from matplotlib.ticker import FormatStrFormatter
 from scipy.interpolate import Rbf
-from pygam import LinearGAM, s
+from pygam import LinearGAM, s,te
 
 
 
@@ -46,15 +46,6 @@ class PolarPlot:
         for p in pollutants:
             self.__generate_plot(df, p, file_prefix)
 
-    def aggregate_data(self, df):
-        # Assuming wind direction is in degrees and wind speed is numerical
-        df['wind_dir_bin'] = pd.cut(df['wind_dir'], bins=np.linspace(0, 360, 10), include_lowest=True)
-        df['wind_speed_bin'] = pd.cut(df['wind_speed'], bins=np.linspace(0, df['wind_speed'].max() + 1, 21), include_lowest=True)
-        aggregated = df.groupby(['wind_dir_bin', 'wind_speed_bin']).mean().reset_index()
-        aggregated['wind_dir_bin_mid'] = aggregated['wind_dir_bin'].apply(lambda x: x.mid)
-        aggregated['wind_speed_bin_mid'] = aggregated['wind_speed_bin'].apply(lambda x: x.mid)
-        return aggregated
-
     
     def __generate_plot(self, df, pollutant, file_prefix):
         fig = plt.figure(figsize=self.figsize)
@@ -72,6 +63,7 @@ class PolarPlot:
 
         binned_data['wind_dir_midpoint_rad'] = np.deg2rad(binned_data['wind_dir_bin'].apply(lambda x: x.mid).astype(float))  # Converted to radians
         binned_data['wind_speed_midpoint'] = binned_data['wind_speed_bin'].apply(lambda x: x.mid).astype(float)
+
         nan_rows = binned_data[pollutant].isna()
         inf_rows = np.isinf(binned_data[pollutant])
         invalid_rows = nan_rows | inf_rows
@@ -79,9 +71,10 @@ class PolarPlot:
 
 
         # Modelling with GAM
-        gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], 
-                                                    (binned_data[pollutant]))
-        #cartesian grid
+        # gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], (binned_data[pollutant]))
+        gam = LinearGAM(te(0, 1, lam=0.2, n_splines=[20, 15],basis=['ps', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
+
+        #cartesian grids
         theta_grid, r_grid = np.meshgrid(
                             np.deg2rad(np.linspace(0, 360, 100)),
                             np.linspace(binned_data['wind_speed_midpoint'].min(), binned_data['wind_speed_midpoint'].max(), 200))
