@@ -2,18 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from pathlib import Path
-from matplotlib.colors import PowerNorm
-from scipy.interpolate import griddata
-from scipy.ndimage import gaussian_filter
-from scipy.stats import gaussian_kde
 from matplotlib.ticker import FormatStrFormatter
-import matplotlib.cm as cm
-from windrose import WindroseAxes
-from sklearn.neighbors import KernelDensity
-from matplotlib.colors import ListedColormap
-from matplotlib.ticker import FormatStrFormatter
-from scipy.interpolate import Rbf
 from pygam import LinearGAM, s,te
 
 
@@ -71,8 +60,9 @@ class PolarPlot:
 
 
         # Modelling with GAM
+        
         # gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], (binned_data[pollutant]))
-        gam = LinearGAM(te(0, 1, lam=0.2, n_splines=[20, 15],basis=['ps', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
+        gam = LinearGAM(te(0, 1, lam=0.5, n_splines=[25, 20],basis=['cp', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
 
         #cartesian grids
         theta_grid, r_grid = np.meshgrid(
