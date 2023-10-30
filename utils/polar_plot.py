@@ -62,7 +62,7 @@ class PolarPlot:
         # Modelling with GAM
         
         # gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], (binned_data[pollutant]))
-        gam = LinearGAM(te(0, 1, lam=0.3, n_splines=[20, 15],basis=['cp', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
+        gam = LinearGAM(te(0, 1, lam=0.7, n_splines=[25, 20],basis=['cp', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
 
         #cartesian grids
         theta_grid, r_grid = np.meshgrid(
@@ -71,8 +71,7 @@ class PolarPlot:
         
         predicted_concentration = gam.predict(np.column_stack((theta_grid.ravel(), r_grid.ravel()))).reshape(theta_grid.shape)
         
-        # Assuming `binned_data_mask` is a boolean mask indicating where data exists
-        radius = 1.5  # adjust this value based on your data's scale
+        radius = 1.7  
 
         # Create an empty mask with the same dimensions as the grid
         binned_data_mask = np.zeros(theta_grid.shape, dtype=bool)
@@ -88,7 +87,7 @@ class PolarPlot:
             binned_data_mask |= (distance_squared < radius**2)
         
         predicted_concentration = np.ma.masked_where(~binned_data_mask, predicted_concentration)
-        levels = np.linspace(np.min(predicted_concentration), np.max(predicted_concentration), 50)
+        levels = np.linspace(np.min(predicted_concentration), np.max(predicted_concentration), 100)
         contour = ax.contourf(theta_grid, r_grid, predicted_concentration, levels = levels, cmap='jet')
         cbar = plt.colorbar(contour, ax=ax, pad=0.1, shrink=0.5)
         cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
