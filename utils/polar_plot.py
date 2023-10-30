@@ -62,17 +62,33 @@ class PolarPlot:
         # Modelling with GAM
         
         # gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], (binned_data[pollutant]))
-        gam = LinearGAM(te(0, 1, lam=0.5, n_splines=[25, 20],basis=['cp', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
+        gam = LinearGAM(te(0, 1, lam=0.3, n_splines=[20, 15],basis=['cp', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
 
         #cartesian grids
         theta_grid, r_grid = np.meshgrid(
-                            np.deg2rad(np.linspace(0, 360, 100)),
-                            np.linspace(binned_data['wind_speed_midpoint'].min(), binned_data['wind_speed_midpoint'].max(), 200))
+                            np.deg2rad(np.linspace(0, 360, 500)),
+                            np.linspace(binned_data['wind_speed_midpoint'].min(), binned_data['wind_speed_midpoint'].max(), 500))
         
         predicted_concentration = gam.predict(np.column_stack((theta_grid.ravel(), r_grid.ravel()))).reshape(theta_grid.shape)
-        invalid_mask =  np.isnan(predicted_concentration) | np.isinf(predicted_concentration)
-        predicted_concentration = np.ma.masked_where(invalid_mask, predicted_concentration)
-        levels = np.linspace(np.min(predicted_concentration), np.max(predicted_concentration), 1000)
+        
+        # Assuming `binned_data_mask` is a boolean mask indicating where data exists
+        radius = 1.5  # adjust this value based on your data's scale
+
+        # Create an empty mask with the same dimensions as the grid
+        binned_data_mask = np.zeros(theta_grid.shape, dtype=bool)
+
+        # Iterate through binned_data and mark the corresponding grid cells in the mask
+        for index, row in binned_data.iterrows():
+            theta, r = row['wind_dir_midpoint_rad'], row['wind_speed_midpoint']
+            
+            # Compute the squared distance from each grid cell to the data point
+            distance_squared = ((theta_grid - theta) * r)**2 + (r_grid - r)**2
+            
+            # Update the binned_data_mask for cells that fall within the defined radius
+            binned_data_mask |= (distance_squared < radius**2)
+        
+        predicted_concentration = np.ma.masked_where(~binned_data_mask, predicted_concentration)
+        levels = np.linspace(np.min(predicted_concentration), np.max(predicted_concentration), 50)
         contour = ax.contourf(theta_grid, r_grid, predicted_concentration, levels = levels, cmap='jet')
         cbar = plt.colorbar(contour, ax=ax, pad=0.1, shrink=0.5)
         cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
