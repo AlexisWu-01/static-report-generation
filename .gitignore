@@ -25,6 +25,8 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+/test_enc
+/20*
 .Python
 env/
 build/

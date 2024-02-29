@@ -12,7 +12,7 @@ from matplotlib.ticker import MaxNLocator
 from visualizers.calendar_plot import CalendarPlot
 from visualizers.timeplot_thresholds import Timeplot
 from visualizers.diurnal_plot import DiurnalPlot
-from .polar_plot import PolarPlot
+from .polar_plot import OpenAirPlots
 # from .polarPlot import PolarPlot
 # Subscripts (for captions and labels)
 SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
@@ -58,7 +58,7 @@ def wind_polar_plot(data_PM, pm):
     df = data_PM[['timestamp', 'wind_speed', 'wind_dir', 'pm25', 'pm10', 'pm1']]
     # Remove any points where wind data was unavailable. 
     df = df[df.wind_speed != 0]
-    air_plt = PolarPlot()
+    air_plt = OpenAirPlots()
     air_plt.polar_plot(df, 'utils/', [pm])
     
     # Take current image, save image again using matplotlib

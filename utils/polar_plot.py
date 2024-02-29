@@ -1,107 +1,136 @@
+"""
+Author: Hwei-Shin Harriman
+Project: Air Partners
+
+Functions to render various air quality graphs
+"""
 import os
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.ticker import FormatStrFormatter
-from pygam import LinearGAM, s,te
+from pathlib import Path
+#TODO this path only works for Ubuntu, make OS specific (i.e. on MAC the R_HOME is at "/Library/Frameworks/R.framework/Resources")
+if not os.environ.get("R_HOME"):
+    os.environ['R_HOME'] = "/usr/lib/R"
+from rpy2.robjects.packages import importr
+from rpy2.robjects import pandas2ri
+import rpy2.robjects as ro
+from rpy2.robjects.lib import grdevices
+from PIL import Image
 
-
-
-class PolarPlot:
+def plot(df, handler, sensor_id, save_prefix=None, smoothed=True, cols=None):
     """
-    Class to generate polar plots.
+    Create diurnal and polar plots for relevant columns in dataframe.
+
+    :param df: (pd.DataFrame) dataframe containing cleaned AQ data
+    :param handler: (either SNHandler or ModPMHandler from quantaq_pipeline) the data handler for the SN or MOD-PM sensor
+    :param smoothed: (optional bool) True if unrealistically high values were removed from df
+    :param cols: (optional list) if defined, determines the columns of df to include in the plots
+    :returns: null but saves OpenAir figures as .pngs locally.
     """
+    plot_path = f"imgs/{sensor_id}"
+    #make image directories for this sensor if they do not exist already
+    Path(plot_path).mkdir(parents=True, exist_ok=True)
+    save_prefix = save_prefix if save_prefix else handler.get_save_name(smoothed=smoothed)
+    prefix = os.path.join(plot_path, save_prefix)
 
-    def __init__(self, figsize=(7, 7)):
-        self.figsize = figsize
+    cols = cols if cols else handler.data_cols
+    #make sure that only columns that have data will be plotted
+    non_null_cols = []
+    for c in cols:
+        if not df[c].isnull().all():
+            non_null_cols.append(c)
 
-    def polar_plot(self, df, file_prefix, pollutants, dir_bins_count=721, speed_bins_count=1000):
+    #generate diurnal and polar plots for the non_null columns
+    plt = OpenAirPlots()
+    plt.time_variation(df, prefix, non_null_cols)
+    plt.polar_plot(df, prefix, non_null_cols)
+
+class OpenAirPlots:
+    """
+    Wrapper class to call OpenAir functions from R.
+    """
+    def __init__(self):
+        self.openair = importr('openair')
+        self.grdevices = importr('grDevices')
+
+    def _convert_df(self, df):
         """
-        Generate polar plots for pollutants.
+        Convert a pandas dataframe to an OpenAir-compatible rpy2 dataframe
 
-        Parameters:
-        - df: DataFrame containing wind data and pollutant values.
-        - file_prefix: Prefix for the saved file.
-        - pollutants: List of pollutant column names to plot.
-        - dir_bins_count: Number of bins for wind direction.
-        - speed_bins_count: Number of bins for wind speed.
+        :param df: (pd.DataFrame) dataframe to convert
+        :returns: converted dataframe with specific columns renamed to fit requirements of OpenAir
         """
-        if 'wind_dir' not in df.columns or 'wind_speed' not in df.columns:
-            raise ValueError("The dataframe must contain 'wind_dir' and 'wind_speed' columns.")
+        pandas2ri.activate()
+        #for openair we need to have a few specific column names
+        df = df.rename(columns={"timestamp_local": "date", "wind_speed": "ws", "wind_dir": "wd"})
+        # To R DataFrame
+        r_df = ro.conversion.py2rpy(df)
+        return r_df
 
-        # aggregated = self.aggregate_data(df)
+    def time_variation(self, df, file_prefix, pollutants, width=1200, height=700):
+        """
+        Saves a .png diurnal plot of pollutants over time
 
+        :param df: (pd.DataFrame) cleaned dataframe containing pollutant sensor data
+        :file_prefix: (str) unique identifier to save the plot
+        :pollutants: (list of str) array of columns corresponding to pollutants to be included in plot
+        :param width: (optional int) width in px of the figure
+        :param height: (optional int) height in px of the figure
+        :returns: null
+        """
+        #convert pandas df to rpy2 df
+        r_df = self._convert_df(df)
 
+        #build string representation of pollutants to pass into openair
+        pols = ""
         for p in pollutants:
-            self.__generate_plot(df, p, file_prefix)
+            pols += f'"{p}", '
+        pols = pols.rstrip(", ")
+        pols = f"c({pols})"
+        print(pols)
 
+        #create diurnal plot, may take a few seconds to complete
+        self.grdevices.png(f"{file_prefix}_diurnal.png", width=width, height=height)
+        ro.r.timeVariation(r_df, pollutant = ro.r(pols), normalise = True, main = "Normalized Group of Pollutants Diurnal Profile")
+
+    def displayOpenairPlot(self, func, filename, width, height, res=150, *args, **kwargs):
+        with grdevices.render_to_bytesio(grdevices.png, width=width, height=height, res=res) as img:
+            _ = func(*args, **kwargs)
+        # Display image
+        # image = IPython.display.Image(data=img.getvalue(), format='png', embed=True)
+        # IPython.display.display(image)
+        ro.r('gc()')
+        
+        # save the image as PNG
+        img2 = Image.open(img)
+        img2.save(f"{filename}.png")
+        img.close()
+        img2.close()
     
-    def __generate_plot(self, df, pollutant, file_prefix):
-        fig = plt.figure(figsize=self.figsize)
-        ax = plt.subplot(1, 1, 1, polar=True)
-        self.__configure_polar_axes(ax)
-        df = df.dropna(subset=['wind_dir', 'wind_speed'])
+    def polar_plot(self, df, file_prefix, pollutants, width=700, height=700):
+        """
+        Saves a .png polar plot for each pollutant. The polar plot visualizes the concentration and direction of origin
+        of a given pollutant relative to the location of the sensor box.
 
-        bin_edges = np.arange(0, 370, 10)  # This creates 36 bins of 10 degrees each
-        df = df.dropna(subset=['wind_dir', 'wind_speed', pollutant])
-        df['wind_dir'] = df['wind_dir'] % 360  # Ensures wind_dir values are within [0, 360)
-        df['wind_dir_bin'] = pd.cut(df['wind_dir'], bins=bin_edges, include_lowest=True, right=False)
-        df['wind_speed_bin'] = pd.cut(df['wind_speed'], bins=np.arange(0, df['wind_speed'].max() + 1, 0.1), include_lowest=True)
-        #aggregating pollutant concentration
-        binned_data = df.groupby(['wind_dir_bin', 'wind_speed_bin'],observed=False)[pollutant].mean().reset_index()
+        :param df: (pd.DataFrame) cleaned dataframe containing pollutant sensor data
+        :param file_prefix: (str) unique identifier to save the plot
+        :param pollutants: (list of str) array of columns corresponding to pollutants. each pollutant will get its own plot
+        :param width: (optional int) width in px of the figure
+        :param height: (optional int) height in px of the figure
+        :returns: null
+        """
+        #convert dataframe to rpy2 df
+        r_df = self._convert_df(df)
 
-        binned_data['wind_dir_midpoint_rad'] = np.deg2rad(binned_data['wind_dir_bin'].apply(lambda x: x.mid).astype(float))  # Converted to radians
-        binned_data['wind_speed_midpoint'] = binned_data['wind_speed_bin'].apply(lambda x: x.mid).astype(float)
-
-        nan_rows = binned_data[pollutant].isna()
-        inf_rows = np.isinf(binned_data[pollutant])
-        invalid_rows = nan_rows | inf_rows
-        binned_data = binned_data[~invalid_rows]
-
-
-        # Modelling with GAM
-        
-        # gam = LinearGAM(s(0,basis='cp') + s(1)).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], (binned_data[pollutant]))
-        gam = LinearGAM(te(0, 1, lam=0.7, n_splines=[25, 20],basis=['cp', 'ps'])).fit(binned_data[['wind_dir_midpoint_rad', 'wind_speed_midpoint']], binned_data[pollutant])
-
-        #cartesian grids
-        theta_grid, r_grid = np.meshgrid(
-                            np.deg2rad(np.linspace(0, 360, 500)),
-                            np.linspace(binned_data['wind_speed_midpoint'].min(), binned_data['wind_speed_midpoint'].max(), 500))
-        
-        predicted_concentration = gam.predict(np.column_stack((theta_grid.ravel(), r_grid.ravel()))).reshape(theta_grid.shape)
-        
-        radius = 1.7  
-
-        # Create an empty mask with the same dimensions as the grid
-        binned_data_mask = np.zeros(theta_grid.shape, dtype=bool)
-
-        # Iterate through binned_data and mark the corresponding grid cells in the mask
-        for index, row in binned_data.iterrows():
-            theta, r = row['wind_dir_midpoint_rad'], row['wind_speed_midpoint']
-            
-            # Compute the squared distance from each grid cell to the data point
-            distance_squared = ((theta_grid - theta) * r)**2 + (r_grid - r)**2
-            
-            # Update the binned_data_mask for cells that fall within the defined radius
-            binned_data_mask |= (distance_squared < radius**2)
-        
-        predicted_concentration = np.ma.masked_where(~binned_data_mask, predicted_concentration)
-        levels = np.linspace(np.min(predicted_concentration), np.max(predicted_concentration), 100)
-        contour = ax.contourf(theta_grid, r_grid, predicted_concentration, levels = levels, cmap='jet')
-        cbar = plt.colorbar(contour, ax=ax, pad=0.1, shrink=0.5)
-        cbar.set_label(f'{pollutant.upper()} Concentration ($\mu g/m^3$)', rotation=270, labelpad=20)
-        cbar.ax.tick_params(labelsize=10)
-        cbar.formatter = FormatStrFormatter('%.1f')
-        cbar.update_ticks()
-        plt.tight_layout()
-        plt.title(f'{pollutant.upper()} ($\mu g/m^3$)', pad=20, fontsize=16, fontweight='bold')
-        plt.savefig(f"{file_prefix}_polar_{pollutant}.png")
-        plt.close()
-
-    def __configure_polar_axes(self, ax):
-        ax.set_theta_direction(-1)
-        ax.set_theta_offset(np.pi/2)
-        ax.set_xticks(np.deg2rad(np.arange(0, 360, 45)))
-        ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'])
-        ax.spines['polar'].set_visible(True)
+        #save a polar plot for each pollutant, may take several seconds to complete
+        for p in pollutants:
+            # self.grdevices.png(f"{file_prefix}_polar_{p}.png", width=width, height=height)
+            # ro.r.polarPlot(r_df, pollutant = p, main = f"{p.upper()} Polar Plot")
+            self.displayOpenairPlot(self.openair.polarPlot,
+                                    filename=f"{file_prefix}_polar_{p}", 
+                                    width=width, 
+                                    height=height, 
+                                    mydata=r_df, 
+                                    pollutant=p,
+                                    main=f'{p} (ug/m3)', 
+                                    statistic='nwr',
+                                    col="jet")
+            ro.r('rm(list = ls())')
